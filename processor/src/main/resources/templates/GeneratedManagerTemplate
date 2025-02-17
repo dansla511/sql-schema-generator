@@ -1,0 +1,86 @@
+package sk.tuke.meta.example;
+
+import object.ObjectFactory;
+import sk.tuke.meta.persistence.PersistenceManager;
+import sk.tuke.meta.persistence.EntityDAO;
+[# th:each="item : ${entities}"]
+import sk.tuke.meta.example.[(${item})]DAO;
+[/]
+import java.lang.reflect.Proxy;
+import java.sql.Connection;
+import java.util.*;
+
+public class GeneratedPersistenceManager implements PersistenceManager {
+    private final Connection connection;
+    private final Map<Class<?>, EntityDAO<?>> daos = new LinkedHashMap<>();
+    private final ObjectFactory factory;
+
+    public GeneratedPersistenceManager(Connection connection) {
+        this.connection = connection;
+        this.factory = new ObjectFactory(this);
+        [# th:each="item : ${entities}"]
+        putDAO([(${item})].class, new [(${item})]DAO(this.connection, this.factory));
+        [/]
+    }
+
+    @SuppressWarnings("unchecked")
+    public <T> EntityDAO<T> getDAO(Class<T> type) {
+        // Types are checked in put DAO method to match properly,
+        // so the cast should be OK
+        return (EntityDAO<T>) daos.get(type);
+    }
+
+    protected <T> void putDAO(Class<T> type, EntityDAO<T> dao) {
+        daos.put(type, dao);
+    }
+
+    public Connection getConnection() {
+        return connection;
+    }
+
+    @Override
+    public void createTables() {
+        for (var dao : daos.values()) {
+            dao.createTable();
+        }
+    }
+
+    @Override
+    public <T> Optional<T> get(Class<T> type, long id) {
+        return getDAO(type).get(id);
+    }
+
+    @Override
+    public <T> List<T> getAll(Class<T> type) {
+        return getDAO(type).getAll();
+    }
+
+    @Override
+    public <T> List<T> getBy(Class<T> type, String fieldName, Object value) {
+        return getDAO(type).getBy(fieldName, value);
+    }
+
+    @Override
+    public long save(Object entity) {
+        Class<?> entityClass;
+        Class<?> proxyInterface = null;
+
+        if(Proxy.isProxyClass(entity.getClass())){
+            proxyInterface = Arrays.stream(entity.getClass().getInterfaces()).findFirst().get();
+            try {
+                entityClass = Class.forName(proxyInterface.getPackageName() + "." + proxyInterface.getSimpleName().substring(1));
+            } catch (ClassNotFoundException e) {
+                throw new RuntimeException(e);
+            }
+
+            return getDAO(entityClass).save(entity);
+
+        }
+        return getDAO(entity.getClass()).save(entity);
+    }
+
+    @Override
+    public void delete(Object entity) {
+        getDAO((entity.getClass())).delete(entity);
+    }
+}

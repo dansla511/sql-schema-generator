@@ -1,0 +1,118 @@
+package sk.tuke.meta.example;
+
+import query.QueryBuilder;
+import object.ObjectFactory;
+import sk.tuke.meta.persistence.AbstractDAO;
+
+import sk.tuke.meta.example.[(${type})];
+
+import javax.persistence.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.lang.reflect.Proxy;
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.*;
+
+public class [(${type})]DAO extends AbstractDAO<[(${type})]> {
+
+    private final ObjectFactory factory;
+
+    public [(${type})]DAO(Connection connection, ObjectFactory factory) {
+        super(connection);
+        this.factory = factory;
+    }
+
+    @Override
+    public void createTable() {
+        InputStream stream = this.getClass().getClassLoader().getResourceAsStream("db.sql");
+        try {
+            String tableName = [(${type})].class.getAnnotation(Table.class).name();
+
+            if(tableName.isEmpty()){
+                tableName = [(${type})].class.getSimpleName();
+            }
+
+            String[] statements = new String(stream.readAllBytes(), StandardCharsets.UTF_8).split(";");
+            for (String s: Arrays.copyOf(statements, statements.length-1)) {
+                if(s.contains(tableName)){
+                    connection.prepareStatement(s).execute();
+                }
+            }
+        } catch (IOException | SQLException e) {
+            throw new RuntimeException(e);
+        }
+        return;
+
+    }
+
+    @Override
+    public Optional<[(${type})]> get(long id) {
+        try {
+            ResultSet result = connection.prepareStatement(builder.buildGetStatement([(${type})].class, id)).executeQuery();
+
+            [(${type})] o;
+
+            if(result.next()){
+                o = factory.createObject([(${type})].class,result);
+            }
+            else{
+                o = null;
+            }
+
+            if(o == null){
+                return Optional.empty();
+            }
+            else{
+                return Optional.of(o);
+            }
+
+        }
+        catch (Exception e) {
+            throw new PersistenceException(e);
+        }
+    }
+
+    @Override
+    public List<[(${type})]> getAll() {
+        try {
+            ResultSet results = connection.prepareStatement(builder.buildGetStatement([(${type})].class)).executeQuery();
+
+            List<[(${type})]> resultList = new ArrayList<>();
+
+            while(results.next()){
+                resultList.add(factory.createObject([(${type})].class, results));
+            }
+
+            System.out.println(resultList);
+
+            return resultList;
+        } catch (Exception e) {
+            throw new PersistenceException(e);
+        }
+    }
+
+    @Override
+    public List<[(${type})]> getBy(String fieldName, Object value) {
+        try {
+            ResultSet results = connection.prepareStatement(
+                    builder.buildGetStatement([(${type})].class, fieldName, value)).executeQuery();
+
+            List<[(${type})]> resultList = new ArrayList<>();
+
+            while(results.next()){
+                resultList.add(factory.createObject([(${type})].class, results));
+            }
+
+            return resultList;
+        }
+        catch (Exception e) {
+            throw new PersistenceException(e);
+        }
+    }
+
+}
